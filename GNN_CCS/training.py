@@ -26,6 +26,7 @@ iteration=30
 update = 'mean'
 output = 'mean'
 
+
 class GraphNeuralNetwork(nn.Module):
     def __init__(self):
         super(GraphNeuralNetwork, self).__init__()
