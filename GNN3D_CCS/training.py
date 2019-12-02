@@ -14,7 +14,8 @@ import GNN3D_CCS.preprocess as pp
 dim=200
 nadduct=4
 layer_hidden=6
-layer_output=6
+layer_output=3
+layer_predict=3
 
 # The setting for optimization.
 batch_train=32
@@ -34,7 +35,9 @@ class MolecularGraphNeuralNetwork(nn.Module):
                                      for _ in range(layer_hidden)])
         self.W_output = nn.ModuleList([nn.Linear(dim, dim)
                                        for _ in range(layer_output)])
-        self.W_property = nn.Linear(dim, 1)
+        self.W_predict = nn.ModuleList([nn.Linear(dim+nadduct, dim+nadduct)
+                                       for _ in range(layer_predict)])
+        self.W_property = nn.Linear(dim+nadduct, 1)
 
     def pad(self, matrices, pad_value):
         """Pad the list of matrices
@@ -66,7 +69,7 @@ class MolecularGraphNeuralNetwork(nn.Module):
     def forward(self, inputs):
 
         """Cat or pad each input data for batch processing."""
-        atoms, distance_matrices, molecular_sizes = inputs
+        atoms, distance_matrices, molecular_sizes, adducts = inputs
         atoms = torch.cat(atoms)
         distance_matrix = self.pad(distance_matrices, 1e6)
 
@@ -84,6 +87,12 @@ class MolecularGraphNeuralNetwork(nn.Module):
 
         """Molecular vector by sum of the atom vectors."""
         molecular_vectors = self.sum(atom_vectors, molecular_sizes)
+        
+        # combine with adduct information
+        adducts = torch.stack(adducts)
+        molecular_vectors = torch.cat((molecular_vectors, adducts),1)
+        for l in range(layer_predict):
+            molecular_vectors = torch.relu(self.W_predict[l](molecular_vectors))     
 
         """Molecular property."""
         properties = self.W_property(molecular_vectors)
@@ -106,7 +115,7 @@ class MolecularGraphNeuralNetwork(nn.Module):
             ys = predicted_properties.to('cpu').data.numpy()
             ts, ys = np.concatenate(ts), np.concatenate(ys)
             sum_absolute_error = sum(np.abs(ts-ys))
-            return sum_absolute_error
+            return ts, ys, sum_absolute_error
 
 
 class Trainer(object):
@@ -134,17 +143,22 @@ class Tester(object):
 
     def test(self, dataset):
         N = len(dataset)
-        SAE = 0
+        Ts, Ys, SAE = [], [], 0
         for i in range(0, N, batch_test):
             data_batch = list(zip(*dataset[i:i+batch_test]))
-            sum_absolute_error = self.model(data_batch, train=False)
-            SAE += sum_absolute_error
+            ts, ys, sae = self.model(data_batch, train=False)
+            SAE += sae
+            Ts += ts.tolist()
+            Ys += ys.tolist()
         MAE = SAE / N
-        return MAE
+        return np.array(Ts), np.array(Ys), MAE
 
     def save_result(self, result, filename):
         with open(filename, 'a') as f:
             f.write(result + '\n')
+            
+    def save_model(self, model, filename):
+        torch.save(model.state_dict(), filename)
 
 
 def train_test_split(data_file, corrd_file, ratio=0.1):
@@ -204,6 +218,7 @@ if __name__ == "__main__":
     train_test_split('Data/data.csv', 'Data/GNN3D_CCS/3DCoord_CCS.txt')
     
     dataset='GNN3D_CCS'
+    file_model = 'Output/GNN3D_CCS/model.h5'
     # dataset=yourdataset
 
     # The molecular property to be learned.
@@ -232,6 +247,10 @@ if __name__ == "__main__":
     print('# of development data samples:', len(dataset_dev))
     print('# of test data samples:', len(dataset_test))
     print('-'*100)
+    
+    # load mean and std
+    mean = np.load('Data/GNN3D_CCS/mean.npy')
+    std = np.load('Data/GNN3D_CCS/std.npy')
 
     print('Creating a model.')
     torch.manual_seed(1234)  # initialize the model with a random seed.
@@ -266,10 +285,12 @@ if __name__ == "__main__":
         epoch += 1
         if epoch % decay_interval == 0:
             trainer.optimizer.param_groups[0]['lr'] *= lr_decay
-
+        
+        error_best = 99999
+        
         loss_train = trainer.train(dataset_train)
-        error_dev = tester.test(dataset_dev)
-        error_test = tester.test(dataset_test)
+        _, _, error_dev = tester.test(dataset_dev)
+        _, _, error_test = tester.test(dataset_test)
 
         time = timeit.default_timer() - start
 
@@ -285,7 +306,22 @@ if __name__ == "__main__":
         result = '\t'.join(map(str, [epoch, time, loss_train,
                                      error_dev, error_test]))
         tester.save_result(result, file_result)
+        
+        if error_dev <= error_best:
+            error_best = error_dev
+            tester.save_model(model, file_model)
 
         print(result)
 
     print('The training has finished!')
+    
+    import matplotlib.pyplot as plt
+    from sklearn.metrics import r2_score, mean_absolute_error
+    
+    true_ccs, pred_ccs, predictions_test = tester.test(dataset_test)
+    true_ccs = true_ccs * std + mean
+    pred_ccs = pred_ccs * std + mean
+
+    r2 = r2_score(true_ccs, pred_ccs)
+    mae = mean_absolute_error(true_ccs, pred_ccs)
+    rmae = np.mean(np.abs(true_ccs - pred_ccs) / true_ccs) * 100    

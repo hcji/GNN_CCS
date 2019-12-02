@@ -151,8 +151,7 @@ class Tester(object):
         SMILES, Ts, Ys, SE_sum = '', [], [], 0
         for i in range(0, N, batch):
             data_batch = list(zip(*dataset[i:i+batch]))
-            (Smiles, correct_properties,
-             predicted_properties) = self.model(data_batch, train=False)
+            (Smiles, correct_properties, predicted_properties) = self.model(data_batch, train=False)
             SMILES += ' '.join(Smiles) + ' '
             Ts.append(correct_properties)
             Ys.append(predicted_properties)
@@ -212,8 +211,8 @@ if __name__ == "__main__":
     np_load_old = np.load
     np.load = lambda *a,**k: np_load_old(*a, allow_pickle=True, **k)
     '''
-    device = torch.device('cpu')
-    dir_input = 'Data/input/GNN_CCS/radius' + str(radius) + '/'
+    device = torch.device('cpu') 
+    dir_input = 'Data/GNN_CCS/input/radius' + str(radius) + '/'
     mean = load_numpy(dir_input + 'mean')
     std = load_numpy(dir_input + 'std')
     with open(dir_input + 'fingerprint_dict.pickle', 'rb') as f:
@@ -286,14 +285,12 @@ if __name__ == "__main__":
     plt.plot(loss['MSE_test'], color='r')
     plt.plot(loss['MSE_dev'], color='b')
     '''
-    model_load = torch.load('Output/GNN_CCS/model.h5')
-    tester_load = Tester(model_load)
-    MSE_test, predictions_test = tester.test(dataset_test)
-    tester.save_predictions(predictions_test, 'Output/GNN_CCS/results_best_model.txt')
     
-    res = pd.read_table('Output/GNN_CCS/results_best_model.txt')
+    MSE_test, predictions_test = tester.test(dataset_test)
+    tester.save_predictions(predictions_test, 'Output/GNN_CCS/results.txt')
+    
+    res = pd.read_table('Output/GNN_CCS/results.txt')
     r2 = r2_score(res['Correct'], res['Predict'])
     mae = mean_absolute_error(res['Correct'], res['Predict'])
     rmae = np.mean(np.abs(res['Correct'] - res['Predict']) / res['Correct']) * 100
-    
     

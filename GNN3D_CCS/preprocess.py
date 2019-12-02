@@ -5,7 +5,10 @@ import pandas as pd
 from scipy import spatial
 
 import torch
+from DeepCCS.model.encoders import AdductToOneHotEncoder
 
+adducts_encoder = AdductToOneHotEncoder()
+adducts_encoder.fit(['M+H', 'M+Na', 'M-2H', 'M-H'])
 
 def create_atoms(atoms, atom_dict):
     """Transform the atom types in a molecule (e.g., H, C, and O)
@@ -52,14 +55,33 @@ def create_datasets(dataset, physical_property, device):
 
         """The physical_property is an energy, HOMO, or LUMO."""
         property_index = property_types.index(physical_property)
+        adduct_index = property_types.index('Adducts')
 
+        
+        properties = []
+        for data in data_original:
+            data = data.strip().split('\n')
+            property = float(data[-1].split()[property_index])
+            properties.append(property)
+
+        if filename == 'data_train.txt':
+            mean = np.mean(properties)
+            std = np.std(properties)
+            np.save('Data/GNN3D_CCS/mean.npy', mean)
+            np.save('Data/GNN3D_CCS/std.npy', std)
+        else:
+            mean = np.load('Data/GNN3D_CCS/mean.npy')
+            std = np.load('Data/GNN3D_CCS/std.npy')
+        
         dataset = []
-
         for data in data_original:
 
             data = data.strip().split('\n')
-            idx = data[0]
+            # idx = data[0]
             property = float(data[-1].split()[property_index])
+            property = (property - mean) / std
+            adduct = data[-1].split()[adduct_index]
+            adduct = adducts_encoder.transform(np.array([adduct]))
 
             """Load the atoms and their coordinates of a molecular data."""
             atoms, atom_coords = [], []
@@ -80,8 +102,10 @@ def create_datasets(dataset, physical_property, device):
             atoms = torch.LongTensor(atoms).to(device)
             distance_matrix = torch.FloatTensor(distance_matrix).to(device)
             property = torch.FloatTensor([[property]]).to(device)
-
-            dataset.append((atoms, distance_matrix, molecular_size, property))
+            adduct = torch.FloatTensor(adduct[0]).to(device)
+            
+            
+            dataset.append((atoms, distance_matrix, molecular_size, adduct, property))
 
         return dataset
 
