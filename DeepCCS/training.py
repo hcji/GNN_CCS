@@ -34,7 +34,7 @@ K.set_session(session)
 
 
 def split_dataset(dataset, ratio):
-    # one SMILES should not be in both train and test dataset 
+    # one SMILES should not be in both train and test dataset
     smiles = dataset['SMILES']
     smiles_unique = np.unique(smiles)
     np.random.shuffle(smiles_unique)
@@ -44,6 +44,8 @@ def split_dataset(dataset, ratio):
     test_index = np.where([i in test_smiles for i in smiles])[0]
     dataset_1 = dataset.loc[train_index,:]
     dataset_2 = dataset.loc[test_index,:]
+    dataset_1 = dataset_1.reset_index(drop=True)
+    dataset_2 = dataset_2.reset_index(drop=True)
     return dataset_1, dataset_2
 
 
@@ -51,7 +53,7 @@ if __name__ == "__main__":
     
     dataset = pd.read_csv('Data/data.csv')
     train_set, test_set = split_dataset(dataset, 0.1)
-    train_set, valid_set = split_dataset(dataset, 0.11)
+    train_set, valid_set = split_dataset(train_set, 0.11)
     
     smiles_encoder = SmilesToOneHotEncoder()
     smiles_encoder.fit(dataset['SMILES'])

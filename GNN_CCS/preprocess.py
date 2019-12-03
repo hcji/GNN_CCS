@@ -88,7 +88,13 @@ def dump_dictionary(dictionary, filename):
 if __name__ == "__main__":
     
     import pandas as pd
+    from rdkit.Chem.Descriptors import ExactMolWt
+    from rdkit.Chem.Crippen import MolLogP
+    from rdkit.Chem.rdmolops import GetFormalCharge
+    from rdkit.Chem.rdMolDescriptors import CalcNumRings, CalcNumRotatableBonds
+    from mordred.LogS import LogS
     from DeepCCS.model.encoders import AdductToOneHotEncoder
+    CalcLogS = LogS()
     
     def preprocess(dataset, dir_input):
         
@@ -100,10 +106,11 @@ if __name__ == "__main__":
         adducts_encoder.fit(train_adducts)
         adducts = adducts_encoder.transform(train_adducts)
     
-        Smiles, molecules, adjacencies, properties = '', [], [], []
+        Smiles, molecules, adjacencies, properties, descriptors = '', [], [], [], []
         for i, smi in enumerate(train_smiles):
             if '.' in smi:
                 continue
+            smi = Chem.MolToSmiles(Chem.MolFromSmiles(smi))
             mol = Chem.MolFromSmiles(smi)
             mol = Chem.AddHs(mol)
             atoms = create_atoms(mol)
@@ -116,6 +123,8 @@ if __name__ == "__main__":
             molecules.append(fingerprints)
             adjacencies.append(adjacency)
             properties.append([[train_ccs[i]]])
+            descriptors.append([ExactMolWt(mol), MolLogP(mol), GetFormalCharge(mol),
+                                CalcNumRings(mol), CalcNumRotatableBonds(mol), CalcLogS(mol)])
     
         properties = np.array(properties)
         mean, std = np.mean(properties), np.std(properties)
@@ -130,6 +139,7 @@ if __name__ == "__main__":
         np.save(dir_input + 'adducts', adducts)
         np.save(dir_input + 'adjacencies', adjacencies)
         np.save(dir_input + 'properties', properties)
+        np.save(dir_input + 'descriptors', descriptors)
         np.save(dir_input + 'mean', mean)
         np.save(dir_input + 'std', std)
         dump_dictionary(fingerprint_dict, dir_input + 'fingerprint_dict.pickle')

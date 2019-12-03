@@ -13,16 +13,16 @@ import torch.nn.functional as F
 import torch.optim as optim
 
 radius=1
-dim=32
-nadduct=4
+dim=64
+extra=10
 hidden_layer=4
-output_layer=3
+output_layer=4
 batch=32
-lr=1e-3
+lr=5e-4
 lr_decay=0.9
 decay_interval=10
 weight_decay=1e-6
-iteration=30
+iteration=100
 update = 'mean'
 output = 'mean'
 
@@ -33,9 +33,9 @@ class GraphNeuralNetwork(nn.Module):
         self.embed_fingerprint = nn.Embedding(n_fingerprint, dim)
         self.W_fingerprint = nn.ModuleList([nn.Linear(dim, dim)
                                             for _ in range(hidden_layer)])
-        self.W_output = nn.ModuleList([nn.Linear(dim+nadduct, dim+nadduct)
+        self.W_output = nn.ModuleList([nn.Linear(dim+extra, dim+extra)
                                        for _ in range(output_layer)])
-        self.W_property = nn.Linear(dim+nadduct, 1)
+        self.W_property = nn.Linear(dim+extra, 1)
 
     def pad(self, matrices, pad_value):
         """Pad adjacency matrices for batch processing."""
@@ -69,7 +69,7 @@ class GraphNeuralNetwork(nn.Module):
 
     def forward(self, inputs):
 
-        Smiles, adducts, fingerprints, adjacencies = inputs
+        Smiles, adducts, fingerprints, adjacencies, descriptors = inputs
         axis = [len(f) for f in fingerprints]
 
         M = np.concatenate([np.repeat(len(f), len(f)) for f in fingerprints])
@@ -90,9 +90,11 @@ class GraphNeuralNetwork(nn.Module):
         if output == 'mean':
             molecular_vectors = self.mean_axis(fingerprint_vectors, axis)
 
-        # combine with adduct information
+        # combine with adduct and molwt information
         adducts = torch.stack(adducts)
+        descriptors = torch.stack(descriptors)
         molecular_vectors = torch.cat((molecular_vectors, adducts),1)
+        molecular_vectors = torch.cat((molecular_vectors, descriptors),1)
         
         for j in range(output_layer):
             molecular_vectors = torch.relu(self.W_output[j](molecular_vectors))
@@ -225,8 +227,9 @@ if __name__ == "__main__":
         molecules = load_tensor(dir_input + 'molecules', torch.LongTensor)
         adducts = load_tensor(dir_input + 'adducts', torch.FloatTensor)
         adjacencies = load_numpy(dir_input + 'adjacencies')
+        descriptors = load_tensor(dir_input + 'descriptors', torch.FloatTensor)
         properties = load_tensor(dir_input + 'properties', torch.FloatTensor)
-        dataset = list(zip(Smiles, adducts, molecules, adjacencies, properties))
+        dataset = list(zip(Smiles, adducts, molecules, adjacencies, descriptors, properties))
         dataset = shuffle_dataset(dataset, 1234)
         return dataset
     
