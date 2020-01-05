@@ -52,9 +52,17 @@ def split_dataset(dataset, ratio):
 if __name__ == "__main__":
     
     dataset = pd.read_csv('Data/data.csv')
+    
+    # remove compounds if the smiles have a '.'
+    keep = np.where(['.' not in i for i in dataset['SMILES']])[0]
+    dataset = dataset.loc[keep,:]
+    dataset = dataset.reset_index(drop=True)
+    
+    # split dataset
     train_set, test_set = split_dataset(dataset, 0.1)
     train_set, valid_set = split_dataset(train_set, 0.11)
     
+    # encoder
     smiles_encoder = SmilesToOneHotEncoder()
     smiles_encoder.fit(dataset['SMILES'])
     train_smi = smiles_encoder.transform(train_set['SMILES'])
@@ -76,7 +84,7 @@ if __name__ == "__main__":
     
     model.train_model(X1_train=train_smi, X2_train=train_add, Y_train=train_set['CCS'],
                       X1_valid=valid_smi, X2_valid=valid_add, Y_valid=valid_set['CCS'],
-                      model_checkpoint=m_checkpoint, nbr_epochs=30, verbose=1)
+                      model_checkpoint=m_checkpoint, nbr_epochs=100, verbose=1)
     
     # test model
     model = DeepCCSModel()

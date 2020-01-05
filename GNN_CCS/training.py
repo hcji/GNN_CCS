@@ -14,11 +14,11 @@ import torch.optim as optim
 
 radius=1
 dim=64
-extra=10
+extra=14
 hidden_layer=4
 output_layer=4
 batch=32
-lr=5e-4
+lr=1e-3
 lr_decay=0.9
 decay_interval=10
 weight_decay=1e-6

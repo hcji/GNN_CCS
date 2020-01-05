@@ -93,8 +93,14 @@ if __name__ == "__main__":
     from rdkit.Chem.rdmolops import GetFormalCharge
     from rdkit.Chem.rdMolDescriptors import CalcNumRings, CalcNumRotatableBonds
     from mordred.LogS import LogS
+    from mordred.AcidBase import AcidicGroupCount, BasicGroupCount
+    from mordred.Polarizability import APol, BPol
     from DeepCCS.model.encoders import AdductToOneHotEncoder
     CalcLogS = LogS()
+    AcidCount = AcidicGroupCount()
+    BaseCount = BasicGroupCount()
+    APolar = APol()
+    BPolar = BPol()
     
     def preprocess(dataset, dir_input):
         
@@ -124,7 +130,8 @@ if __name__ == "__main__":
             adjacencies.append(adjacency)
             properties.append([[train_ccs[i]]])
             descriptors.append([ExactMolWt(mol), MolLogP(mol), GetFormalCharge(mol),
-                                CalcNumRings(mol), CalcNumRotatableBonds(mol), CalcLogS(mol)])
+                                CalcNumRings(mol), CalcNumRotatableBonds(mol), CalcLogS(mol),
+                                AcidCount(mol), BaseCount(mol), APolar(mol), BPolar(mol)])
     
         properties = np.array(properties)
         mean, std = np.mean(properties), np.std(properties)
